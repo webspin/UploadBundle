@@ -1,0 +1,6 @@
+# A J A X
+webspin_upload_ajax_add:
+    pattern: /{id}/ajouter
+    defaults: { _controller: WebspinAndisBundle:Document:add}
+    requirements:
+        _method:  GET|POST|HEAD|PUT|DELETE

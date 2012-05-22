@@ -10,7 +10,7 @@
  * http://www.opensource.org/licenses/MIT
  */
 
-namespace Bold\ImageBundle\Classes;
+namespace Webspin\UploadBundle\Classes;
 
 class UploadHandler
 {
@@ -20,42 +20,21 @@ class UploadHandler
     function __construct($options=null, $script = null) {
         $this->options = array(
             'script_url' => $this->getFullUrl().'/',
-            'upload_dir' => dirname($_SERVER['SCRIPT_FILENAME']).'/files/',
+            'upload_dir' => dirname($_SERVER['SCRIPT_FILENAME']).'/../data/uploads/files/',
             'upload_url' => $this->getFullUrl().'/files/',
-            'param_name' => 'files',
+            'param_name' => 'document',
             // Set the following option to 'POST', if your server does not support
             // DELETE requests. This is a parameter sent to the client:
             'delete_type' => 'DELETE',
             // The php.ini settings upload_max_filesize and post_max_size
             // take precedence over the following max_file_size setting:
-            'max_file_size' => null,
+            'max_file_size' => 2000000,
             'min_file_size' => 1,
-            'accept_file_types' => '/.+$/i',
+            'accept_file_types' => '/.(pdf)|(jpg)|(jpeg)|(doc)/i',
             'max_number_of_files' => null,
             // Set the following option to false to enable resumable uploads:
             'discard_aborted_uploads' => true,
             // Set to true to rotate images based on EXIF meta data, if available:
-            'orient_image' => false,
-            'image_versions' => array(
-                // Uncomment the following version to restrict the size of
-                // uploaded images. You can also add additional versions with
-                // their own upload directories:
-                /*
-                'large' => array(
-                    'upload_dir' => dirname($_SERVER['SCRIPT_FILENAME']).'/files/',
-                    'upload_url' => $this->getFullUrl().'/files/',
-                    'max_width' => 1920,
-                    'max_height' => 1200,
-                    'jpeg_quality' => 95
-                ),
-                */
-                'thumbnail' => array(
-                    'upload_dir' => dirname($_SERVER['SCRIPT_FILENAME']).'/thumbnails/',
-                    'upload_url' => $this->getFullUrl().'/thumbnails/',
-                    'max_width' => 80,
-                    'max_height' => 80
-                )
-            )
         );
         if ($options) {
             $this->options = array_replace_recursive($this->options, $options);
@@ -118,66 +97,7 @@ class UploadHandler
         )));
     }
 
-    protected function create_scaled_image($file_name, $options) {
-        $file_path = $this->options['upload_dir'].$file_name;
-        $new_file_path = $options['upload_dir'].$file_name;
-        list($img_width, $img_height) = @getimagesize($file_path);
-        if (!$img_width || !$img_height) {
-            return false;
-        }
-        $scale = min(
-            $options['max_width'] / $img_width,
-            $options['max_height'] / $img_height
-        );
-        if ($scale >= 1) {
-            if ($file_path !== $new_file_path) {
-                return copy($file_path, $new_file_path);
-            }
-            return true;
-        }
-        $new_width = $img_width * $scale;
-        $new_height = $img_height * $scale;
-        $new_img = @imagecreatetruecolor($new_width, $new_height);
-        switch (strtolower(substr(strrchr($file_name, '.'), 1))) {
-            case 'jpg':
-            case 'jpeg':
-                $src_img = @imagecreatefromjpeg($file_path);
-                $write_image = 'imagejpeg';
-                $image_quality = isset($options['jpeg_quality']) ?
-                    $options['jpeg_quality'] : 75;
-                break;
-            case 'gif':
-                @imagecolortransparent($new_img, @imagecolorallocate($new_img, 0, 0, 0));
-                $src_img = @imagecreatefromgif($file_path);
-                $write_image = 'imagegif';
-                $image_quality = null;
-                break;
-            case 'png':
-                @imagecolortransparent($new_img, @imagecolorallocate($new_img, 0, 0, 0));
-                @imagealphablending($new_img, false);
-                @imagesavealpha($new_img, true);
-                $src_img = @imagecreatefrompng($file_path);
-                $write_image = 'imagepng';
-                $image_quality = isset($options['png_quality']) ?
-                    $options['png_quality'] : 9;
-                break;
-            default:
-                $src_img = null;
-        }
-        $success = $src_img && @imagecopyresampled(
-            $new_img,
-            $src_img,
-            0, 0, 0, 0,
-            $new_width,
-            $new_height,
-            $img_width,
-            $img_height
-        ) && $write_image($new_img, $new_file_path, $image_quality);
-        // Free up memory (imagedestroy does not delete files):
-        @imagedestroy($src_img);
-        @imagedestroy($new_img);
-        return $success;
-    }
+    
 
     protected function has_error($uploaded_file, $file, $error) {
         if ($error) {
@@ -242,34 +162,7 @@ class UploadHandler
         return $file_name;
     }
 
-    protected function orient_image($file_path) {
-      	$exif = @exif_read_data($file_path);
-        if ($exif === false) {
-            return false;
-        }
-      	$orientation = intval(@$exif['Orientation']);
-      	if (!in_array($orientation, array(3, 6, 8))) {
-      	    return false;
-      	}
-      	$image = @imagecreatefromjpeg($file_path);
-      	switch ($orientation) {
-        	  case 3:
-          	    $image = @imagerotate($image, 180, 0);
-          	    break;
-        	  case 6:
-          	    $image = @imagerotate($image, 270, 0);
-          	    break;
-        	  case 8:
-          	    $image = @imagerotate($image, 90, 0);
-          	    break;
-          	default:
-          	    return false;
-      	}
-      	$success = imagejpeg($image, $file_path);
-      	// Free up memory (imagedestroy does not delete files):
-      	@imagedestroy($image);
-      	return $success;
-    }
+    
 
     protected function handle_file_upload($uploaded_file, $name, $size, $type, $error) {
         $file = new \stdClass();
@@ -303,21 +196,8 @@ class UploadHandler
             }
             $file_size = filesize($file_path);
             if ($file_size === $file->size) {
-            	if ($this->options['orient_image']) {
-            		$this->orient_image($file_path);
-            	}
-                $file->url = $this->options['upload_url'].rawurlencode($file->name);
-                foreach($this->options['image_versions'] as $version => $options) {
-                    if ($this->create_scaled_image($file->name, $options)) {
-                        if ($this->options['upload_dir'] !== $options['upload_dir']) {
-                            $file->{$version.'_url'} = $options['upload_url']
-                                .rawurlencode($file->name);
-                        } else {
-                            clearstatcache();
-                            $file_size = filesize($file_path);
-                        }
-                    }
-                }
+            	$file->url = $this->options['upload_url'].rawurlencode($file->name);
+            	$file->path = realpath($file_path);
             } else if ($this->options['discard_aborted_uploads']) {
                 unlink($file_path);
                 $file->error = 'abort';
@@ -349,6 +229,7 @@ class UploadHandler
         $upload = isset($_FILES[$this->options['param_name']]) ?
             $_FILES[$this->options['param_name']] : null;
         $info = array();
+        
         if ($upload && is_array($upload['tmp_name'])) {
             // param_name is an array identifier like "files[]",
             // $_FILES is a multi-dimensional array:
@@ -414,5 +295,6 @@ class UploadHandler
         header('Content-type: application/json');
         echo json_encode($success);
     }
+    
 
 }
